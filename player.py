@@ -1,5 +1,6 @@
-# player.py - ARCHIVO COMPLETO
+# player.py - ARCHIVO COMPLETO CORREGIDO
 import pygame
+
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y, character_type, base_path):
@@ -20,19 +21,23 @@ class Player(pygame.sprite.Sprite):
         self.gravity = 0.6
         self.on_ground = False
         
+        # Doble salto
+        self.max_jumps = 2
+        self.jumps_left = self.max_jumps
+        
         # Animación
         self.current_animation = "walk"
         self.current_frame = 0
         self.frame_counter = 0
         self.animation_speed = 8
-        self.direction = 2  # 0=up, 1=left, 2=down, 3=right
+        self.direction = 2
         
         # Estados
         self.is_casting = False
         self.is_hurt = False
         self.hurt_timer = 0
         
-        # Sprites (se cargan en clases hijas)
+        # Sprites
         self.animations = {}
         self.frame_counts = {}
     
@@ -70,12 +75,17 @@ class Player(pygame.sprite.Sprite):
                 self.vel_x = self.speed
                 self.direction = 3
             
-            # Salto
-            if (keys[pygame.K_SPACE] or keys[pygame.K_w] or keys[pygame.K_UP]) and self.on_ground:
-                self.vel_y = -self.jump_power
-                self.on_ground = False
+            # Salto con doble salto
+            if (keys[pygame.K_SPACE] or keys[pygame.K_w] or keys[pygame.K_UP]):
+                if self.jumps_left > 0 and not hasattr(self, '_jump_pressed'):
+                    self.vel_y = -self.jump_power
+                    self.jumps_left -= 1
+                    self.on_ground = False
+                    self._jump_pressed = True
+            else:
+                if hasattr(self, '_jump_pressed'):
+                    delattr(self, '_jump_pressed')
         else:
-            # No moverse si está lanzando hechizo
             self.vel_x = 0
         
         # Aplicar gravedad
@@ -83,25 +93,40 @@ class Player(pygame.sprite.Sprite):
         if self.vel_y > 15:
             self.vel_y = 15
         
-        # Actualizar posición
+        # Movimiento horizontal
         self.x += self.vel_x
-        self.y += self.vel_y
         self.rect.x = int(self.x)
+        
+        # Colisiones horizontales
+        for platform in platforms:
+            platform_rect = platform['rect'] if isinstance(platform, dict) else platform
+            
+            if self.rect.colliderect(platform_rect):
+                if self.vel_x > 0:
+                    self.rect.right = platform_rect.left
+                    self.x = self.rect.x
+                elif self.vel_x < 0:
+                    self.rect.left = platform_rect.right
+                    self.x = self.rect.x
+        
+        # Movimiento vertical
+        self.y += self.vel_y
         self.rect.y = int(self.y)
         
-        # Colisiones con plataformas
+        # Colisiones verticales
         self.on_ground = False
         for platform in platforms:
-            if self.rect.colliderect(platform):
-                # Colisión desde arriba
+            platform_rect = platform['rect'] if isinstance(platform, dict) else platform
+            
+            if self.rect.colliderect(platform_rect):
                 if self.vel_y > 0:
-                    self.rect.bottom = platform.top
+                    self.rect.bottom = platform_rect.top
                     self.y = self.rect.y
                     self.vel_y = 0
                     self.on_ground = True
-                # Colisión desde abajo
+                    self.jumps_left = self.max_jumps
                 elif self.vel_y < 0:
-                    self.rect.top = platform.bottom
+                    self.rect.top = platform_rect.bottom
                     self.y = self.rect.y
                     self.vel_y = 0
         
@@ -111,7 +136,6 @@ class Player(pygame.sprite.Sprite):
     def _update_animation(self):
         """Actualiza el frame actual de la animación"""
         
-        # Determinar qué animación usar
         if self.is_hurt:
             self.current_animation = "hurt"
         elif self.is_casting:
@@ -119,51 +143,42 @@ class Player(pygame.sprite.Sprite):
         elif abs(self.vel_x) > 0:
             self.current_animation = "walk"
         else:
-            # Idle = primer frame de walk
             if self.current_animation == "walk":
                 self.current_frame = 0
                 return
         
-        # Avanzar frame
         self.frame_counter += 1
         if self.frame_counter >= self.animation_speed:
             max_frames = self.frame_counts[self.current_animation]
             
-            # Animaciones que NO hacen loop (una sola vez)
             if self.current_animation in ["spell", "hurt"]:
-                # Avanzar sin loop
                 if self.current_frame < max_frames - 1:
                     self.current_frame += 1
                 else:
-                    # Llegó al final, terminar animación
                     if self.is_casting:
                         self.is_casting = False
                         self.on_spell_complete()
                     if self.is_hurt:
                         self.is_hurt = False
                     
-                    # Volver a idle
                     self.current_frame = 0
                     self.current_animation = "walk"
             else:
-                # Walk sí hace loop
                 self.current_frame = (self.current_frame + 1) % max_frames
             
             self.frame_counter = 0
     
     def on_spell_complete(self):
         """Callback cuando termina animación de spell"""
-        pass  # Sobrescrito por clases hijas
+        pass
     
     def get_current_frame(self):
         """Obtiene el frame actual del sprite sheet"""
         current_sheet = self.animations[self.current_animation]
         
-        # Detectar si tiene múltiples direcciones
         num_directions = current_sheet.get_height() // 64
         actual_direction = 0 if num_directions == 1 else self.direction
         
-        # Extraer frame
         frame_x = self.current_frame * 64
         frame_y = actual_direction * 64
         
@@ -173,15 +188,32 @@ class Player(pygame.sprite.Sprite):
         """Dibuja el jugador en pantalla"""
         frame = self.get_current_frame()
         
-        # Centrar sprite sobre hitbox
         draw_x = self.rect.x - 8
         draw_y = self.rect.y - 4
         
         surface.blit(frame, (draw_x, draw_y))
         
-        # Debug: dibujar hitbox (comentar después)
-        # pygame.draw.rect(surface, (255, 0, 0), self.rect, 2)
-    
+    # player.py - Añadir este método a la clase Player
+
+    def draw_at(self, surface, pos):
+        """Dibuja el jugador en una posición específica (para cámara)"""
+        frame = self.get_current_frame()
+        
+        # Centrar sprite sobre hitbox
+        draw_x = pos[0] - 8
+        draw_y = pos[1] - 4
+        
+        surface.blit(frame, (draw_x, draw_y))
+
     def use_ability(self):
         """Método abstracto - implementar en clases hijas"""
         pass
+    
+    def take_damage(self):
+        """Recibe daño del jefe"""
+        if not self.is_hurt:
+            self.is_hurt = True
+            self.hurt_timer = 30
+            self.current_frame = 0
+            print("💔 Jugador recibe daño!")
+    
