@@ -1,0 +1,67 @@
+{
+    "S": {
+        "row": 3,
+        "col": 1,
+        "name": "Piedra"
+    },
+    "T": {
+        "row": 4,
+        "col": 0,
+        "name": "Tierra"
+    },
+    "M": {
+        "row": 2,
+        "col": 3,
+        "name": "Musgo"
+    },
+    "A": {
+        "row": 1,
+        "col": 4,
+        "name": "Tile A"
+    },
+    "C": {
+        "row": 0,
+        "col": 0,
+        "name": "Tile C"
+    },
+    "D": {
+        "row": 0,
+        "col": 2,
+        "name": "Tile D"
+    },
+    "E": {
+        "row": 0,
+        "col": 1,
+        "name": "Tile E"
+    },
+    "F": {
+        "row": 1,
+        "col": 2,
+        "name": "Tile F"
+    },
+    "H": {
+        "row": 1,
+        "col": 0,
+        "name": "Tile H"
+    },
+    "I": {
+        "row": 1,
+        "col": 1,
+        "name": "Tile I"
+    },
+    "J": {
+        "row": 0,
+        "col": 3,
+        "name": "Tile J"
+    },
+    "K": {
+        "row": 3,
+        "col": 0,
+        "name": "Tile K"
+    },
+    "L": {
+        "row": 3,
+        "col": 2,
+        "name": "Tile L"
+    }
+}

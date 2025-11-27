@@ -1,5 +1,7 @@
 # main.py - COMPLETO CON CÁMARA Y SISTEMA DE GAME OVER
 import pygame
+import json
+import os
 from config import *
 from mage import Mage
 from level import Level
@@ -27,8 +29,11 @@ class Game:
         self.width = WIDTH
         self.height = HEIGHT
         
-        self.current_level = 1
-        self.current_section = 1
+        # Load level order
+        self.level_order = []
+        self.current_level_index = 0
+        self.load_level_order()
+        
         self.game_state = "playing"
         
         self.projectiles = []
@@ -37,10 +42,50 @@ class Game:
         
         self.camera = None
         
-        self.load_level(1, 1)
+        # Load first level from list
+        if self.level_order:
+            self.load_level_by_index(0)
+        else:
+            print("No levels found in level_order.json!")
+    
+    def load_level_order(self):
+        """Load level order from JSON file"""
+        if os.path.exists("level_order.json"):
+            try:
+                with open("level_order.json", "r") as f:
+                    self.level_order = json.load(f)
+                print(f"Loaded {len(self.level_order)} levels from level_order.json")
+            except Exception as e:
+                print(f"Error loading level_order.json: {e}")
+                self.level_order = []
+        else:
+            print("level_order.json not found!")
+            self.level_order = []
+    
+    def load_level_by_index(self, index):
+        """Load level by index from level_order list"""
+        if 0 <= index < len(self.level_order):
+            level_file = self.level_order[index]
+            self.current_level_index = index
+            
+            self.level = Level(level_file)
+            spawn_x, spawn_y = self.level.player_spawn
+            self.player = Mage(spawn_x, spawn_y)
+            
+            self.projectiles = []
+            self.game_state = "playing"
+            
+            # Create camera
+            level_width, level_height = self.level.get_dimensions()
+            self.camera = Camera(level_width, level_height)
+            print(f"Camara creada para nivel {level_width}x{level_height}")
+            print(f"Nivel cargado: {level_file} ({index + 1}/{len(self.level_order)})")
+        else:
+            print("Game Complete!")
+            self.game_state = "game_complete"
     
     def load_level(self, level_num, section_num):
-        """Carga nivel y crea el personaje"""
+        """Carga nivel y crea el personaje (legacy method)"""
         self.level = Level(f"levels/level{level_num}_section{section_num}.txt")
         
         spawn_x, spawn_y = self.level.player_spawn
@@ -54,13 +99,12 @@ class Game:
         # Crear cámara
         level_width, level_height = self.level.get_dimensions()
         self.camera = Camera(level_width, level_height)
-        print(f"📷 Cámara creada para nivel {level_width}x{level_height}")
+        print(f"Camara creada para nivel {level_width}x{level_height}")
     
     def reset_current_level(self):
         """Reinicia el nivel actual"""
-        print("💀 GAME OVER - Reiniciando nivel...")
-        self.load_level(self.current_level, 1)
-        self.current_section = 1
+        print("GAME OVER - Reiniciando nivel...")
+        self.load_level_by_index(self.current_level_index)
     
     def run(self):
         running = True
@@ -157,9 +201,13 @@ class Game:
         
         # Verificar victoria
         if self.level.check_section_complete(self.player):
-            self.current_section += 1
-            print(f"✓ Sección {self.current_section - 1} completada!")
-            self.load_level(self.current_level, self.current_section)
+            next_index = self.current_level_index + 1
+            if next_index < len(self.level_order):
+                print(f"Nivel completado! Cargando siguiente...")
+                self.load_level_by_index(next_index)
+            else:
+                print("JUEGO COMPLETADO!")
+                self.game_state = "game_complete"
     
     def update_game_over(self):
         """Update durante game over"""
@@ -206,11 +254,14 @@ class Game:
         
         # Info nivel
         small_font = pygame.font.Font(None, 20)
+        level_name = "N/A"
+        if 0 <= self.current_level_index < len(self.level_order):
+            level_name = self.level_order[self.current_level_index].split("/")[-1].replace(".txt", "")
         mode_text = small_font.render(
-            f"Nivel {self.current_level}-{self.current_section} | F11=Fullscreen | F=Disparar", 
+            f"Nivel: {level_name} ({self.current_level_index + 1}/{len(self.level_order)}) | F11=Fullscreen | F=Disparar", 
             True, (200, 200, 200)
         )
-        self.screen.blit(mode_text, (self.width - 450, 10))
+        self.screen.blit(mode_text, (self.width - 550, 10))
     
     def draw_game_over(self):
         """Dibuja pantalla de game over"""

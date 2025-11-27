@@ -1,6 +1,8 @@
 # level.py - COMPLETO CON AUTOTILING + FONDO + DECORACIONES + CÁMARA
 import pygame
 import random
+import json
+import os
 from config import TILE_SIZE, WIDTH, HEIGHT
 
 
@@ -14,11 +16,11 @@ class Level:
         
         # Cargar todos los assets visuales
         self.load_background_layers()
-        self.load_tileset()
+        self.load_tileset()      # Activado
         self.load_decorations()
         
         self.load_from_file(level_file)
-        self.build_autotiles()
+        self.build_autotiles()   # Activado
         self.place_decorations()
     
     def load_background_layers(self):
@@ -95,8 +97,26 @@ class Level:
                 'top_left': self.extract_tile(tileset, 0, 0, tile_size),
                 'top_right': self.extract_tile(tileset, 0, 2, tile_size),
                 'bottom_left': self.extract_tile(tileset, 2, 0, tile_size),
-                'bottom_right': self.extract_tile(tileset, 2, 2, tile_size)
+                'bottom_right': self.extract_tile(tileset, 2, 2, tile_size),
+                # Bloques manuales (ajusta los índices row, col según tu debug_tileset.png)
+                'stone': self.extract_tile(tileset, 3, 1, tile_size)  # Ejemplo: Fila 3, Columna 1
             }
+            
+            # Cargar tiles personalizados desde JSON
+            self.custom_tiles = {}
+            if os.path.exists("tile_map.json"):
+                try:
+                    with open("tile_map.json", "r") as f:
+                        self.custom_tiles = json.load(f)
+                        print(f"✓ {len(self.custom_tiles)} tiles personalizados cargados")
+                        
+                        # Añadir al diccionario de imágenes
+                        for char, data in self.custom_tiles.items():
+                            row = data.get('row', 0)
+                            col = data.get('col', 0)
+                            self.tile_images[char] = self.extract_tile(tileset, row, col, tile_size)
+                except Exception as e:
+                    print(f"⚠ Error cargando tile_map.json: {e}")
             
             print(f"  ✓ {len(self.tile_images)} tipos de tiles cargados")
             
@@ -180,7 +200,27 @@ class Level:
                             platform = {
                                 'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE),
                                 'grid_pos': (col, row),
-                                'tile_type': 'center'
+                                'tile_type': 'center',
+                                'is_manual': False
+                            }
+                            self.platforms.append(platform)
+                        elif char == 'S':  # Stone / Bloque manual
+                            self.platform_grid[(col, row)] = True
+                            
+                            platform = {
+                                'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE),
+                                'grid_pos': (col, row),
+                                'tile_type': 'stone',  # Tipo manual
+                                'is_manual': True      # Evita autotiling
+                            }
+                            self.platforms.append(platform)
+                        elif char in self.custom_tiles: # Tiles personalizados
+                            self.platform_grid[(col, row)] = True
+                            platform = {
+                                'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE),
+                                'grid_pos': (col, row),
+                                'tile_type': char,     # Usamos el caracter como clave
+                                'is_manual': True
                             }
                             self.platforms.append(platform)
                         elif char == 'G':
@@ -196,6 +236,9 @@ class Level:
     def build_autotiles(self):
         """Calcula qué tile usar según vecinos"""
         for platform in self.platforms:
+            if platform.get('is_manual'):
+                continue
+                
             col, row = platform['grid_pos']
             
             has_top = (col, row - 1) in self.platform_grid
@@ -293,16 +336,18 @@ class Level:
         # Plataformas
         for platform in self.platforms:
             rect = platform['rect']
-            tile_type = platform['tile_type']
-            
             screen_rect = camera.apply(rect)
             
-            if screen_rect.colliderect(surface.get_rect()):
-                if self.tile_images and tile_type in self.tile_images:
-                    surface.blit(self.tile_images[tile_type], (screen_rect.x, screen_rect.y))
-                else:
-                    pygame.draw.rect(surface, (60, 80, 60), screen_rect)
-        
+            # Dibujar textura
+            tile_type = platform.get('tile_type', 'center')
+            if self.tile_images and tile_type in self.tile_images:
+                image = self.tile_images[tile_type]
+                surface.blit(image, screen_rect)
+            else:
+                # Fallback: Bloque negro
+                pygame.draw.rect(surface, (0, 0, 0), screen_rect)
+                pygame.draw.rect(surface, (50, 50, 50), screen_rect, 1)
+
         # Goal
         if self.goal:
             goal_rect = camera.apply(self.goal)
@@ -348,12 +393,8 @@ class Level:
         
         for platform in self.platforms:
             rect = platform['rect']
-            tile_type = platform['tile_type']
-            
-            if self.tile_images and tile_type in self.tile_images:
-                surface.blit(self.tile_images[tile_type], (rect.x, rect.y))
-            else:
-                pygame.draw.rect(surface, (60, 80, 60), rect)
+            pygame.draw.rect(surface, (0, 0, 0), rect)
+            pygame.draw.rect(surface, (50, 50, 50), rect, 1)
         
         if self.goal:
             pygame.draw.rect(surface, (50, 255, 150), self.goal)
