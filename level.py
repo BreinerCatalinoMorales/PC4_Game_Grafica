@@ -12,6 +12,12 @@ class Level:
         self.boss = None
         self.player_spawn = (100, 100)
         
+        # Sistema de monstruos
+        self.monsters = []
+        self.monster_spawns = []
+        self.dead_monsters_count = 0
+        self.spawn_cooldown = 0  # Cooldown para generar nuevos monstruos
+        
         # Cargar todos los assets visuales
         self.load_background_layers()
         self.load_tileset()
@@ -188,10 +194,17 @@ class Level:
                         elif char == 'B':
                             from boss import Boss
                             self.boss = Boss(x, y, boss_type="gnu")
+                        elif char == 'U':
+                            from undead_executioner import UndeadExecutioner
+                            self.boss = UndeadExecutioner(x, y)
+                        elif char == 'M':
+                            # Spawn de monstruos
+                            self.monster_spawns.append((x, y))
                         elif char == 'P':
                             self.player_spawn = (x, y)
         except FileNotFoundError:
             print(f"⚠ Archivo {filename} no encontrado")
+            raise  # Re-lanzar para que main.py lo detecte
     
     def build_autotiles(self):
         """Calcula qué tile usar según vecinos"""
@@ -263,8 +276,47 @@ class Level:
             return True
         return False
     
-    def update(self, player):
+    def spawn_monsters(self):
+        """Genera monstruos iniciales en los spawns - 25 monstruos"""
+        from monster import Monster
+        import random
+        
+        if not self.monster_spawns:
+            return
+        
+        monster_types = ["flying_eye", "goblin", "skeleton", "goblin"]  # Más goblins que voladores
+        
+        # Generar 25 monstruos distribuidos en los spawns
+        monsters_to_spawn = 25
+        for i in range(monsters_to_spawn):
+            spawn_pos = self.monster_spawns[i % len(self.monster_spawns)]  # Rotar entre spawns
+            monster_type = random.choice(monster_types)
+            monster = Monster(spawn_pos[0], spawn_pos[1], monster_type)
+            self.monsters.append(monster)
+        
+        print(f"👹 Generados {len(self.monsters)} monstruos iniciales")
+    
+    def spawn_new_monsters(self, count=2):
+        """Genera nuevos monstruos cuando uno muere"""
+        from monster import Monster
+        import random
+        
+        if not self.monster_spawns:
+            return
+        
+        monster_types = ["flying_eye", "goblin", "skeleton", "goblin"]
+        
+        for _ in range(count):
+            spawn_pos = random.choice(self.monster_spawns)
+            monster_type = random.choice(monster_types)
+            monster = Monster(spawn_pos[0], spawn_pos[1], monster_type)
+            self.monsters.append(monster)
+        
+        print(f"👹 Generados {count} nuevos monstruos! Total: {len(self.monsters)}")
+    
+    def update(self, player, game=None):
         """Actualiza lógica del nivel"""
+        # Actualizar boss (niveles 1-2)
         if self.boss:
             self.boss.update()
             
@@ -274,6 +326,32 @@ class Level:
             if self.boss.check_hit_player(player):
                 player.take_damage()
                 return "hit"
+        
+        # Actualizar monstruos (nivel 3+)
+        if self.monsters and game:
+            for monster in self.monsters[:]:
+                # Actualizar IA
+                monster.update_ai(player, game)
+                monster.update_movement(self.platforms)
+                
+                # Verificar colisión con jugador
+                if monster.check_collision_with_player(player):
+                    print("💀 ¡Un monstruo te atrapó!")
+                    return "game_over"
+                
+                # Remover monstruos muertos
+                if not monster.alive:
+                    self.monsters.remove(monster)
+                    self.dead_monsters_count += 1
+                    # Marcar que necesitamos generar monstruos (con cooldown)
+                    self.spawn_cooldown = 180  # 3 segundos a 60 FPS
+            
+            # Generar nuevos monstruos si hay cooldown pendiente
+            if self.spawn_cooldown > 0:
+                self.spawn_cooldown -= 1
+                if self.spawn_cooldown == 0:
+                    # Generar 2 nuevos monstruos
+                    self.spawn_new_monsters(2)
         
         return None
     
@@ -331,6 +409,11 @@ class Level:
         # Boss
         if self.boss:
             self.boss.draw_with_camera(surface, camera)
+        
+        # Monstruos
+        for monster in self.monsters:
+            if monster.alive:
+                monster.draw_with_camera(surface, camera)
         
         # Decoraciones de frente
         for dec in self.placed_decorations:

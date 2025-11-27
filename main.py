@@ -37,7 +37,85 @@ class Game:
         
         self.camera = None
         
+        # Color switcher system
+        self.current_color = "normal"
+        self.color_buttons = self.create_color_buttons()
+        
+        # Sistema de mensajes de nivel
+        self.level_message = ""
+        self.level_message_timer = 0
+        
         self.load_level(1, 1)
+    
+    def create_color_buttons(self):
+        """Crea los botones de cambio de color"""
+        button_width = 90
+        button_height = 35
+        spacing = 10
+        start_x = 10
+        start_y = 10
+        
+        return [
+            {"rect": pygame.Rect(start_x, start_y, button_width, button_height), 
+             "color": "normal", "text": "Normal", "bg": (100, 100, 100)},
+            {"rect": pygame.Rect(start_x + (button_width + spacing), start_y, button_width, button_height),
+             "color": "black", "text": "Negro", "bg": (50, 50, 50)},
+            {"rect": pygame.Rect(start_x + 2*(button_width + spacing), start_y, button_width, button_height),
+             "color": "blue", "text": "Azul", "bg": (0, 50, 150)},
+            {"rect": pygame.Rect(start_x + 3*(button_width + spacing), start_y, button_width, button_height),
+             "color": "red", "text": "Rojo", "bg": (150, 30, 0)},
+            {"rect": pygame.Rect(start_x + 4*(button_width + spacing), start_y, button_width, button_height),
+             "color": "background", "text": "Otro", "bg": (80, 60, 100)}
+        ]
+    
+    def change_player_color(self, color):
+        """Cambia el color del jugador en tiempo real"""
+        try:
+            color_paths = {
+                "normal": "assets/images/player/Mage",
+                "black": "assets/images/player/Mage_Black",
+                "blue": "assets/images/player/Mage_Blue",
+                "red": "assets/images/player/Mage_Red",
+                "background": "assets/images/player/Mage_Background"
+            }
+            
+            if color not in color_paths:
+                print(f"⚠️ Color inválido: {color}")
+                return
+            
+            print(f"🎨 Cambiando color a: {color}")
+            
+            # Guardar estado actual del jugador  
+            old_x = self.player.x
+            old_y = self.player.y
+            old_vel_x = self.player.vel_x
+            old_vel_y = self.player.vel_y
+            old_animation = self.player.current_animation
+            old_frame = self.player.current_frame
+            old_direction = self.player.direction
+            
+            # Cambiar ruta base y recargar sprites
+            self.player.base_path = color_paths[color]
+            self.player.load_sprites()
+            
+            # Restaurar estado
+            self.player.x = old_x
+            self.player.y = old_y
+            self.player.rect.x = int(old_x)
+            self.player.rect.y = int(old_y)
+            self.player.vel_x = old_vel_x
+            self.player.vel_y = old_vel_y
+            self.player.current_animation = old_animation
+            self.player.current_frame = old_frame  
+            self.player.direction = old_direction
+            
+            self.current_color = color
+            print(f"✓ Color cambiado exitosamente a: {color}")
+            
+        except Exception as e:
+            print(f"❌ Error al cambiar color: {e}")
+            import traceback
+            traceback.print_exc()
     
     def load_level(self, level_num, section_num):
         """Carga nivel y crea el personaje"""
@@ -45,7 +123,7 @@ class Game:
         
         spawn_x, spawn_y = self.level.player_spawn
         
-        if level_num <= 2:
+        if level_num <= 3:  # Extendido para nivel 3
             self.player = Mage(spawn_x, spawn_y)
         
         self.projectiles = []
@@ -55,6 +133,13 @@ class Game:
         level_width, level_height = self.level.get_dimensions()
         self.camera = Camera(level_width, level_height)
         print(f"📷 Cámara creada para nivel {level_width}x{level_height}")
+        
+        # Spawnear monstruos si es nivel 3+
+        if level_num >= 3 and self.level.monster_spawns:
+            self.level.spawn_monsters()
+            # Mostrar mensaje de nivel 3 (sin emoji, más duración)
+            self.level_message = "Busca la salida como un camaleon"
+            self.level_message_timer = 360  # 6 segundos a 60 FPS
     
     def reset_current_level(self):
         """Reinicia el nivel actual"""
@@ -79,6 +164,15 @@ class Game:
                 
                 elif event.type == pygame.KEYDOWN:
                     self.handle_keypress(event.key)
+                
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    # Detectar clics en botones de color (niveles 1-3)
+                    if self.current_level <= 3:
+                        mouse_pos = event.pos
+                        for button in self.color_buttons:
+                            if button["rect"].collidepoint(mouse_pos):
+                                self.change_player_color(button["color"])
+                                break
             
             if self.game_state == "playing":
                 self.update()
@@ -139,14 +233,14 @@ class Game:
         # Actualizar cámara
         self.camera.update(self.player.rect)
         
-        # Actualizar nivel
-        level_state = self.level.update(self.player)
+        # Actualizar nivel (pasar referencia del juego para camuflaje)
+        level_state = self.level.update(self.player, self)
         
         # Verificar game over
         if level_state == "game_over":
             self.game_state = "game_over"
             self.game_over_timer = 180
-            self.death_message = "¡EL JEFE TE ATRAPÓ!"
+            self.death_message = "¡EL JEFE TE ATRAPÓ!" if self.level.boss else "¡UN MONSTRUO TE ATRAPÓ!"
             return
         
         # Actualizar proyectiles del jugador
@@ -154,12 +248,48 @@ class Game:
             proj.update(self.level.platforms)
             if not proj.alive:
                 self.projectiles.remove(proj)
+            else:
+                # Verificar colisión con monstruos
+                for monster in self.level.monsters[:]:
+                    if proj.rect.colliderect(monster.rect) and not monster.is_dying:
+                        monster.take_damage()
+                        proj.alive = False
+                        break
         
         # Verificar victoria
         if self.level.check_section_complete(self.player):
-            self.current_section += 1
-            print(f"✓ Sección {self.current_section - 1} completada!")
-            self.load_level(self.current_level, self.current_section)
+            print(f"✓ Sección completada!")
+            
+            # Intentar cargar siguiente sección, si no existe, pasar al siguiente nivel
+            import os
+            next_section_file = f"levels/level{self.current_level}_section{self.current_section + 1}.txt"
+            
+            if os.path.exists(next_section_file):
+                # Hay más secciones en este nivel
+                self.current_section += 1
+                print(f"📍 Cargando nivel {self.current_level}, sección {self.current_section}")
+                self.load_level(self.current_level, self.current_section)
+            else:
+                # No hay más secciones, pasar al siguiente nivel
+                self.current_level += 1
+                self.current_section = 1
+                next_level_file = f"levels/level{self.current_level}_section{self.current_section}.txt"
+                
+                if os.path.exists(next_level_file):
+                    print(f"🎯 ¡Nivel {self.current_level - 1} completado! Pasando al nivel {self.current_level}")
+                    self.load_level(self.current_level, self.current_section)
+                else:
+                    print("🎉 ¡JUEGO COMPLETADO!")
+                    # Mostrar mensaje de felicitaciones
+                    self.level_message = "Felicidades, terminaste el juego"
+                    self.level_message_timer = 600  # 10 segundos
+                    self.game_state = "completed"
+        
+        # Actualizar timer de mensaje de nivel
+        if self.level_message_timer > 0:
+            self.level_message_timer -= 1
+            if self.level_message_timer <= 0:
+                self.level_message = ""
     
     def update_game_over(self):
         """Update durante game over"""
@@ -211,6 +341,42 @@ class Game:
             True, (200, 200, 200)
         )
         self.screen.blit(mode_text, (self.width - 450, 10))
+        
+        # Dibujar botones de color (solo en niveles 1-3)
+        if self.current_level <= 3:
+            button_font = pygame.font.Font(None, 24)
+            for button in self.color_buttons:
+                # Destacar botón activo
+                if button["color"] == self.current_color:
+                    border_color = (255, 255, 0)
+                    border_width = 3
+                else:
+                    border_color = (200, 200, 200)
+                    border_width = 2
+                
+                # Fondo del botón
+                pygame.draw.rect(self.screen, button["bg"], button["rect"])
+                # Borde
+                pygame.draw.rect(self.screen, border_color, button["rect"], border_width)
+                # Texto
+                text = button_font.render(button["text"], True, (255, 255, 255))
+                text_rect = text.get_rect(center=button["rect"].center)
+                self.screen.blit(text, text_rect)
+        
+        # Mensaje de nivel (si existe)
+        if self.level_message:
+            message_font = pygame.font.Font(None, 36)  # Fuente más pequeña
+            
+            # Mensaje en la parte superior
+            message_surf = message_font.render(self.level_message, True, (255, 255, 100))
+            message_rect = message_surf.get_rect(center=(self.width // 2, 50))  # Más arriba
+            
+            # Sombra
+            shadow = message_font.render(self.level_message, True, (0, 0, 0))
+            self.screen.blit(shadow, (message_rect.x + 2, message_rect.y + 2))
+            
+            # Texto principal
+            self.screen.blit(message_surf, message_rect)
     
     def draw_game_over(self):
         """Dibuja pantalla de game over"""
