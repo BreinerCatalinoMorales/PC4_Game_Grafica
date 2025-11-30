@@ -65,8 +65,8 @@ class Boss(pygame.sprite.Sprite):
             self.scale_factor = 5.0
             self.display_width = int(self.frame_width * self.scale_factor)
             self.display_height = int(self.frame_height * self.scale_factor)
-        except Exception as e:
-            print(f"✗ Error cargando jefe: {e}")
+        except Exception:
+            # Fallback en silencio
             self.sprite_sheet = None
             self.frame_width = 64
             self.frame_height = 128
@@ -127,8 +127,6 @@ class Boss(pygame.sprite.Sprite):
     def execute_attack_pattern(self, pattern):
         count = pattern['count']
         spread = pattern['spread']
-        
-        print(f"👊 Boss ataca! Patrón: {count} disparos")
         
         for i in range(count):
             if count == 1:

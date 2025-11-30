@@ -2,10 +2,17 @@ import pygame
 import os
 
 pygame.init()
-base_path = r"c:\Users\estcm\Music\UNI25-1\PC-GRAFICA\PC4_Game_Grafica\Undead executioner\Undead executioner puppet\png"
-files = ["attacking.png", "idle.png", "skill1.png"]
+
+# Use relative path or update base_path as needed
+base_path = "assets/images/enemies" # Example default path, change as needed
+files = ["attacking.png", "idle.png", "skill1.png"] # Add files you want to check here
+
+if not os.path.exists(base_path):
+    print(f"Warning: Base path '{base_path}' not found. Checking current directory instead.")
+    base_path = "."
 
 print(f"Checking in {base_path}")
+
 for f in files:
     path = os.path.join(base_path, f)
     if os.path.exists(path):

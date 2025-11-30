@@ -1,18 +1,8 @@
 {
-    "S": {
-        "row": 3,
-        "col": 1,
-        "name": "Piedra"
-    },
     "T": {
         "row": 4,
         "col": 0,
         "name": "Tierra"
-    },
-    "M": {
-        "row": 2,
-        "col": 3,
-        "name": "Musgo"
     },
     "A": {
         "row": 1,
@@ -29,20 +19,10 @@
         "col": 2,
         "name": "Tile D"
     },
-    "E": {
-        "row": 0,
-        "col": 1,
-        "name": "Tile E"
-    },
     "F": {
         "row": 1,
         "col": 2,
         "name": "Tile F"
-    },
-    "H": {
-        "row": 1,
-        "col": 0,
-        "name": "Tile H"
     },
     "I": {
         "row": 1,
@@ -54,14 +34,34 @@
         "col": 3,
         "name": "Tile J"
     },
-    "K": {
-        "row": 3,
-        "col": 0,
-        "name": "Tile K"
-    },
     "L": {
         "row": 3,
         "col": 2,
         "name": "Tile L"
+    },
+    "N": {
+        "row": 4,
+        "col": 4,
+        "name": "Muro N"
+    },
+    "Q": {
+        "row": 3,
+        "col": 0,
+        "name": "Muro Q"
+    },
+    "R": {
+        "row": 3,
+        "col": 6,
+        "name": "Custom R"
+    },
+    "V": {
+        "row": 3,
+        "col": 1,
+        "name": "Custom V"
+    },
+    "W": {
+        "row": 4,
+        "col": 6,
+        "name": "Custom W"
     }
 }

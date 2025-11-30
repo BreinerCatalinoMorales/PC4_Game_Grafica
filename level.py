@@ -1,10 +1,8 @@
-# level.py - COMPLETO CON AUTOTILING + FONDO + DECORACIONES + CÁMARA
 import pygame
 import random
 import json
 import os
 from config import TILE_SIZE, WIDTH, HEIGHT
-
 
 class Level:
     def __init__(self, level_file):
@@ -14,69 +12,58 @@ class Level:
         self.boss = None
         self.player_spawn = (100, 100)
         
-        # Sistema de monstruos
         self.monsters = []
         self.monster_spawns = []
         self.dead_monsters_count = 0
-        self.spawn_cooldown = 0  # Cooldown para generar nuevos monstruos
+        self.spawn_cooldown = 0
         
-        # Cargar todos los assets visuales
         self.load_background_layers()
-        self.load_tileset()      # Activado
+        self.load_tileset()
         self.load_decorations()
         
         self.load_from_file(level_file)
-        self.build_autotiles()   # Activado
+        self.build_autotiles()
         self.place_decorations()
     
     def load_background_layers(self):
-        """Carga múltiples capas de fondo para profundidad"""
+        self.bg_decor_original = None
+        self.hills_original = None
+        
         try:
             extensiones = ['.png', '.jpg']
             
-            # Capa 1: Decoración de fondo
-            bg_decor = None
             for ext in extensiones:
-                try:
-                    bg_decor = pygame.image.load(f"assets/images/tiles/Mossy/Mossy - Background Decoration{ext}")
+                if os.path.exists(f"assets/images/tiles/Mossy/Mossy - Background Decoration{ext}"):
+                    self.bg_decor_original = pygame.image.load(f"assets/images/tiles/Mossy/Mossy - Background Decoration{ext}")
                     break
-                except:
-                    continue
             
-            # Capa 2: Colinas musgosas
-            hills = None
             for ext in extensiones:
-                try:
-                    hills = pygame.image.load(f"assets/images/tiles/Mossy/Mossy - MossyHills{ext}")
+                if os.path.exists(f"assets/images/tiles/Mossy/Mossy - MossyHills{ext}"):
+                    self.hills_original = pygame.image.load(f"assets/images/tiles/Mossy/Mossy - MossyHills{ext}")
                     break
-                except:
-                    continue
+
+            self.handle_resize(WIDTH, HEIGHT)
             
-            # Escalar y combinar capas
-            if bg_decor and hills:
-                self.background = pygame.transform.scale(bg_decor, (WIDTH, HEIGHT))
-                hills_scaled = pygame.transform.scale(hills, (WIDTH, HEIGHT // 2))
-                self.background.blit(hills_scaled, (0, HEIGHT // 2), special_flags=pygame.BLEND_ALPHA_SDL2)
-                print("✓ Fondo multicapa cargado")
-            elif bg_decor:
-                self.background = pygame.transform.scale(bg_decor, (WIDTH, HEIGHT))
-                print("✓ Fondo básico cargado")
-            else:
-                raise Exception()
-                
-        except:
-            # Fondo degradado mejorado
-            self.background = pygame.Surface((WIDTH, HEIGHT))
-            for y in range(HEIGHT):
-                progress = y / HEIGHT
+        except Exception:
+            self.bg_decor_original = None
+            self.handle_resize(WIDTH, HEIGHT)
+
+    def handle_resize(self, new_width, new_height):
+        if self.bg_decor_original:
+            self.background = pygame.transform.scale(self.bg_decor_original, (new_width, new_height))
+            if self.hills_original:
+                hills_scaled = pygame.transform.scale(self.hills_original, (new_width, new_height // 2))
+                self.background.blit(hills_scaled, (0, new_height // 2))
+        else:
+            self.background = pygame.Surface((new_width, new_height))
+            for y in range(new_height):
+                progress = y / new_height
                 r = int(10 + progress * 30)
                 g = int(20 + progress * 60)
                 b = int(25 + progress * 40)
-                pygame.draw.line(self.background, (r, g, b), (0, y), (WIDTH, y))
-            print("✓ Fondo degradado creado")
+                pygame.draw.line(self.background, (r, g, b), (0, y), (new_width, y))
     
     def load_tileset(self):
-        """Carga el tileset principal con tiles conectables"""
         try:
             extensiones = ['.png', '.jpg']
             tileset = None
@@ -84,13 +71,12 @@ class Level:
             for ext in extensiones:
                 try:
                     tileset = pygame.image.load(f"assets/images/tiles/Mossy/Mossy - TileSet{ext}")
-                    print(f"✓ Tileset cargado: {tileset.get_size()}")
                     break
                 except:
                     continue
             
             if not tileset:
-                raise Exception("No se encontró tileset")
+                raise Exception()
             
             tile_size = 512
             
@@ -104,38 +90,29 @@ class Level:
                 'top_right': self.extract_tile(tileset, 0, 2, tile_size),
                 'bottom_left': self.extract_tile(tileset, 2, 0, tile_size),
                 'bottom_right': self.extract_tile(tileset, 2, 2, tile_size),
-                # Bloques manuales (ajusta los índices row, col según tu debug_tileset.png)
-                'stone': self.extract_tile(tileset, 3, 1, tile_size)  # Ejemplo: Fila 3, Columna 1
+                'stone': self.extract_tile(tileset, 3, 1, tile_size)
             }
             
-            # Cargar tiles personalizados desde JSON
             self.custom_tiles = {}
             if os.path.exists("tile_map.json"):
                 try:
                     with open("tile_map.json", "r") as f:
                         self.custom_tiles = json.load(f)
-                        print(f"✓ {len(self.custom_tiles)} tiles personalizados cargados")
                         
-                        # Añadir al diccionario de imágenes
                         for char, data in self.custom_tiles.items():
                             row = data.get('row', 0)
                             col = data.get('col', 0)
                             self.tile_images[char] = self.extract_tile(tileset, row, col, tile_size)
-                except Exception as e:
-                    print(f"⚠ Error cargando tile_map.json: {e}")
+                except Exception:
+                    pass
             
-            print(f"  ✓ {len(self.tile_images)} tipos de tiles cargados")
-            
-        except Exception as e:
-            print(f"⚠ Error: {e}")
+        except Exception:
             self.tile_images = None
     
     def load_decorations(self):
-        """Carga plantas colgantes y decoraciones"""
         try:
             extensiones = ['.png', '.jpg']
             
-            # Plantas colgantes
             hanging_plants = None
             for ext in extensiones:
                 try:
@@ -144,7 +121,6 @@ class Level:
                 except:
                     continue
             
-            # Decoraciones y hazards
             decorations = None
             for ext in extensiones:
                 try:
@@ -155,7 +131,6 @@ class Level:
             
             self.decorations = []
             
-            # Extraer plantas colgantes individuales
             if hanging_plants:
                 plant_size = 256
                 for i in range(min(6, hanging_plants.get_width() // plant_size)):
@@ -166,7 +141,6 @@ class Level:
                     except:
                         pass
             
-            # Extraer decoraciones de suelo
             if decorations:
                 dec_size = 256
                 for i in range(min(4, decorations.get_width() // dec_size)):
@@ -177,14 +151,10 @@ class Level:
                     except:
                         pass
             
-            print(f"  ✓ {len(self.decorations)} decoraciones cargadas")
-            
-        except Exception as e:
-            print(f"⚠ Error cargando decoraciones: {e}")
+        except Exception:
             self.decorations = []
     
     def extract_tile(self, sheet, row, col, tile_size):
-        """Extrae y escala un tile"""
         x = col * tile_size
         y = row * tile_size
         
@@ -195,7 +165,6 @@ class Level:
         try:
             with open(filename, 'r') as f:
                 lines = f.readlines()
-                print(f"🔍 Cargando nivel: {filename}, líneas: {len(lines)}")
                 for row, line in enumerate(lines):
                     for col, char in enumerate(line):
                         x = col * TILE_SIZE
@@ -203,7 +172,6 @@ class Level:
                         
                         if char == '#':
                             self.platform_grid[(col, row)] = True
-                            
                             platform = {
                                 'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE),
                                 'grid_pos': (col, row),
@@ -211,14 +179,13 @@ class Level:
                                 'is_manual': False
                             }
                             self.platforms.append(platform)
-                        elif char == 'S':  # Stone / Bloque manual
+                        elif char == 'S':
                             self.platform_grid[(col, row)] = True
-                            
                             platform = {
                                 'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE),
                                 'grid_pos': (col, row),
-                                'tile_type': 'stone',  # Tipo manual
-                                'is_manual': True      # Evita autotiling
+                                'tile_type': 'stone',
+                                'is_manual': True
                             }
                             self.platforms.append(platform)
                         elif char == 'G':
@@ -230,27 +197,34 @@ class Level:
                             from undead_executioner import UndeadExecutioner
                             self.boss = UndeadExecutioner(x, y)
                         elif char == 'M':
-                            # Spawn de monstruos (DEBE IR ANTES de custom_tiles)
                             self.monster_spawns.append((x, y))
-                            print(f"👹 Spawn de monstruo agregado en ({x}, {y})")
+                        elif char == 'E':
+                            from monster import Monster
+                            self.monsters.append(Monster(x, y, "flying_eye"))
+                        elif char == 'O':
+                            from monster import Monster
+                            self.monsters.append(Monster(x, y, "goblin"))
+                        elif char == 'K':
+                            from monster import Monster
+                            self.monsters.append(Monster(x, y, "skeleton"))
+                        elif char == 'H':
+                            from monster import Monster
+                            self.monsters.append(Monster(x, y, "mushroom"))
                         elif char == 'P':
                             self.player_spawn = (x, y)
-                        elif char in self.custom_tiles: # Tiles personalizados (DEBE IR DESPUÉS de caracteres especiales)
+                        elif char in self.custom_tiles:
                             self.platform_grid[(col, row)] = True
                             platform = {
                                 'rect': pygame.Rect(x, y, TILE_SIZE, TILE_SIZE),
                                 'grid_pos': (col, row),
-                                'tile_type': char,     # Usamos el caracter como clave
+                                'tile_type': char,
                                 'is_manual': True
                             }
                             self.platforms.append(platform)
-                print(f"✅ Total spawns de monstruos encontrados: {len(self.monster_spawns)}")
         except FileNotFoundError:
-            print(f"⚠ Archivo {filename} no encontrado")
-            raise  # Re-lanzar para que main.py lo detecte
+            raise
     
     def build_autotiles(self):
-        """Calcula qué tile usar según vecinos"""
         for platform in self.platforms:
             if platform.get('is_manual'):
                 continue
@@ -282,7 +256,6 @@ class Level:
                 platform['tile_type'] = 'center'
     
     def place_decorations(self):
-        """Coloca decoraciones automáticamente"""
         self.placed_decorations = []
         
         if not self.decorations:
@@ -303,7 +276,6 @@ class Level:
                     })
     
     def get_dimensions(self):
-        """Obtiene las dimensiones totales del nivel"""
         if not self.platforms:
             return (WIDTH, HEIGHT)
         
@@ -323,29 +295,22 @@ class Level:
         return False
     
     def spawn_monsters(self):
-        """Genera monstruos iniciales en los spawns - 25 monstruos"""
         from monster import Monster
-        import random
         
         if not self.monster_spawns:
             return
         
-        monster_types = ["flying_eye", "goblin", "skeleton", "goblin"]  # Más goblins que voladores
+        monster_types = ["flying_eye", "goblin", "skeleton", "goblin"]
         
-        # Generar 25 monstruos distribuidos en los spawns
         monsters_to_spawn = 25
         for i in range(monsters_to_spawn):
-            spawn_pos = self.monster_spawns[i % len(self.monster_spawns)]  # Rotar entre spawns
+            spawn_pos = self.monster_spawns[i % len(self.monster_spawns)]
             monster_type = random.choice(monster_types)
             monster = Monster(spawn_pos[0], spawn_pos[1], monster_type)
             self.monsters.append(monster)
-        
-        print(f"👹 Generados {len(self.monsters)} monstruos iniciales")
     
     def spawn_new_monsters(self, count=2):
-        """Genera nuevos monstruos cuando uno muere"""
         from monster import Monster
-        import random
         
         if not self.monster_spawns:
             return
@@ -357,12 +322,8 @@ class Level:
             monster_type = random.choice(monster_types)
             monster = Monster(spawn_pos[0], spawn_pos[1], monster_type)
             self.monsters.append(monster)
-        
-        print(f"👹 Generados {count} nuevos monstruos! Total: {len(self.monsters)}")
     
     def update(self, player, game=None):
-        """Actualiza lógica del nivel"""
-        # Actualizar boss (niveles 1-2)
         if self.boss:
             self.boss.update()
             
@@ -373,63 +334,47 @@ class Level:
                 player.take_damage()
                 return "hit"
         
-        # Actualizar monstruos (nivel 3+)
         if self.monsters and game:
             for monster in self.monsters[:]:
-                # Actualizar IA
                 monster.update_ai(player, game)
                 monster.update_movement(self.platforms)
                 
-                # Verificar colisión con jugador
                 if monster.check_collision_with_player(player):
-                    print("💀 ¡Un monstruo te atrapó!")
                     return "game_over"
                 
-                # Remover monstruos muertos
                 if not monster.alive:
                     self.monsters.remove(monster)
                     self.dead_monsters_count += 1
-                    # Marcar que necesitamos generar monstruos (con cooldown)
-                    self.spawn_cooldown = 180  # 3 segundos a 60 FPS
+                    self.spawn_cooldown = 180
             
-            # Generar nuevos monstruos si hay cooldown pendiente
             if self.spawn_cooldown > 0:
                 self.spawn_cooldown -= 1
                 if self.spawn_cooldown == 0:
-                    # Generar 2 nuevos monstruos
                     self.spawn_new_monsters(2)
         
         return None
     
     def draw_background(self, surface):
-        """Dibuja solo el fondo (sin cámara, siempre fijo)"""
         surface.blit(self.background, (0, 0))
     
     def draw_with_camera(self, surface, camera):
-        """Dibuja el nivel con cámara"""
-        
-        # Decoraciones de fondo
         for dec in self.placed_decorations:
             if dec.get('layer') == 'back':
                 pos = camera.apply_pos(dec['pos'][0], dec['pos'][1])
                 surface.blit(dec['image'], pos)
         
-        # Plataformas
         for platform in self.platforms:
             rect = platform['rect']
             screen_rect = camera.apply(rect)
             
-            # Dibujar textura
             tile_type = platform.get('tile_type', 'center')
             if self.tile_images and tile_type in self.tile_images:
                 image = self.tile_images[tile_type]
                 surface.blit(image, screen_rect)
             else:
-                # Fallback: Bloque negro
                 pygame.draw.rect(surface, (0, 0, 0), screen_rect)
                 pygame.draw.rect(surface, (50, 50, 50), screen_rect, 1)
 
-        # Goal
         if self.goal:
             goal_rect = camera.apply(self.goal)
             
@@ -454,23 +399,19 @@ class Level:
             text_rect = text.get_rect(center=goal_rect.center)
             surface.blit(text, text_rect)
         
-        # Boss
         if self.boss:
             self.boss.draw_with_camera(surface, camera)
         
-        # Monstruos
         for monster in self.monsters:
             if monster.alive:
                 monster.draw_with_camera(surface, camera)
         
-        # Decoraciones de frente
         for dec in self.placed_decorations:
             if dec.get('layer') == 'front':
                 pos = camera.apply_pos(dec['pos'][0], dec['pos'][1])
                 surface.blit(dec['image'], pos)
     
     def draw(self, surface):
-        """Dibuja sin cámara (compatibilidad)"""
         surface.blit(self.background, (0, 0))
         
         for dec in self.placed_decorations:
